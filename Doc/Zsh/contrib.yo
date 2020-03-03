@@ -1238,6 +1238,46 @@ of unapplied patches (for example with Mercurial Queue patches).
 
 Used by the tt(quilt), tt(hg), and tt(git) backends.
 )
+kindex(choose-closest-backend)
+item(tt(choose-closest-backend))(
+By default, tt(vcs_info) tries backends in the order given by the tt(enable)
+style, and operates on the repository detected by the first backend to
+successfully detect a repository.
+
+If this style (tt(choose-closest-backend)) is set to tt(true) for some (or all)
+backends, all backends will be divided into two groups:
+
+1) Backends, for which this style is set to tt(true), that detect a
+repository/working copy that is an ancestor of the current directory (including
+the current directory itself).
+
+2) All other backends: backends with tt(choose-closest-backend) unset/set to
+tt(false); and backends that detected a repository/working copy that's not an
+ancestor of the current directory, even if tt(choose-closest-backend) is set to
+tt(true) for them.
+
+First, tt(vcs_info) will try backends from the 2nd group in the order given by
+the tt(enable) style, and operate on the repository detected by the first
+backend to successfully detect a repository (the default behavior of
+tt(vcs_info), only limited to backends from the 2nd group).
+
+If no backends from the 2nd group detected a repository (or if there are no
+backends in that group), tt(vcs_info) will try backends from the 1st group.
+tt(vcs_info) will then operate on the repository closest to the current working
+directory.
+
+Usually, all VCS backends search for repositories only in ancestors of the
+current directory, and choose the repository closest to the current directory.
+So if tt(choose-closest-backend) is set to tt(true) globally for all backends,
+tt(vcs_info) will effectively search for the repository closest to the current
+directory.
+
+However, there is at least one backend that can detect a repository in an
+arbitrary location - Git backend. tt(GIT_WORK_TREE) can be set to a path that
+doesn't point to an ancestor of the current directory. In this case, even if
+tt(choose-closest-backend) is set to tt(true) globally for all backends,
+the repository/working copy pointed by tt(GIT_WORK_TREE) will be preferred.
+)
 enditem()
 
 The default values for these styles in all contexts are:
@@ -1272,6 +1312,7 @@ sitem(tt(quiltcommand))(quilt)
 sitem(tt(patch-format))(var(backend dependent))
 sitem(tt(nopatch-format))(var(backend dependent))
 sitem(tt(get-unapplied))(false)
+sitem(tt(choose-closest-backend))(false)
 endsitem()
 
 In normal tt(formats) and tt(actionformats) the following replacements are

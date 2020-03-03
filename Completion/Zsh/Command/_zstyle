@@ -193,6 +193,7 @@ styles=(
   quilt-standalone       v:bool
   quilt-patch-dir        v:_directories
   quiltcommand           v:_command_names
+  choose-closest-backend v:bool
 
   chpwd			 z:bool
   progress		 z:progress

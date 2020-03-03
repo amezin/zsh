@@ -54,7 +54,7 @@ vcs_info () {
     [[ -r . ]] || return 0
 
     local pat
-    local -i found retval
+    local -i retval
     local -a enabled disabled dps
     local usercontext vcs rrn quiltmode
     local -x LC_MESSAGES
@@ -63,6 +63,9 @@ vcs_info () {
 
     # vcs_comm is used internally for passing values among VCS_INFO_* functions.
     # It is not part of the public API.
+    #
+    # VCS_INFO_detect_* functions should set vcs_comm[basedir] to the path to
+    # the root of the working copy.
     #
     # hook_com, backend_misc, and user_data are public API; see zshcontrib(1)
     # and Misc/vcs_info-examples.
@@ -114,7 +117,9 @@ vcs_info () {
 
     VCS_INFO_maxexports
 
-    (( found = 0 ))
+    local -A chosen_vcs_comm chosen_backend_misc
+    local chosen_vcs basedir_realpath chosen_basedir_realpath choose_first_available
+
     for vcs in ${enabled} ; do
         [[ -n ${(M)disabled:#${vcs}} ]] && continue
         if (( ${+functions[VCS_INFO_detect_${vcs}]} == 0 )) ; then
@@ -124,10 +129,59 @@ vcs_info () {
         fi
         vcs_comm=()
         VCS_INFO_get_cmd
-        VCS_INFO_detect_${vcs} && (( found = 1 )) && break
+        if VCS_INFO_detect_${vcs}; then
+            # Most backends already set vcs_comm[basedir] to an absolute path
+            # with symlinks resolved:
+            #
+            # * Backends using VCS_INFO_bydir_detect:
+            #   bzr, cdv, darcs, fossil, hg, mtn, p4, svn
+            #
+            # * cvs - custom logic, but uses :P too
+            #
+            # * git - $(git rev-parse --show-toplevel) resolves symlinks and
+            #   returns an absolute path
+            #
+            # * for tla (GNU Arch) I can't find any online documentation or
+            #   packages (seems to be dead)
+            #
+            # * svk doesn't use :P modifier and returns the path as is from
+            #   the config file (as far as I understand)
+            #
+            # So I'm not sure whether to modify the backends or just resolve
+            # the path here to be sure. VCS_INFO_get_data_* usually reads
+            # vcs_comm[basedir] too. In particular, I'm not sure if it's safe to
+            # resolve symlinks in vcs_comm[basedir] for svk.
+            #
+            # Because most backends already do :P substitution, I expect all
+            # the info needed to resolve the path to be cached in memory by the
+            # OS (so it shouldn't cause performance issues).
+            basedir_realpath="${vcs_comm[basedir]:P}"
+
+            zstyle -t ":vcs_info:${vcs}:${usercontext}:${rrn}" choose-closest-backend
+            choose_first_available=$?
+
+            [[ "${PWD:P}/" == "${basedir_realpath}"/* ]] || [[ "${basedir_realpath}" == "/" ]] || choose_first_available=1
+
+            # If choose_first_available is 0 at this point, all basedir_realpaths
+            # (and thus chosen_basedir_realpath) are parents (and thus prefixes)
+            # of PWD:P. So comparing their lengths is enough to figure out which
+            # one is closer to PWD.
+            if (( choose_first_available )) || (( ${#basedir_realpath} > ${#chosen_basedir_realpath} )) ; then
+                chosen_vcs="${vcs}"
+                chosen_vcs_comm=("${(kv)vcs_comm[@]}")
+                chosen_backend_misc=("${(kv)backend_misc[@]}")
+                chosen_basedir_realpath="${basedir_realpath}"
+
+                (( choose_first_available )) && break
+            fi
+        fi
     done
 
-    (( found == 0 )) && {
+    vcs="${chosen_vcs}"
+    vcs_comm=("${(kv)chosen_vcs_comm[@]}")
+    backend_misc=("${(kv)chosen_backend_misc[@]}")
+
+    [ -z "${vcs}" ] && {
         vcs='-quilt-'; quiltmode='standalone'
         VCS_INFO_quilt standalone || VCS_INFO_set --nvcs
         return 0
